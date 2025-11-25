@@ -1,6 +1,12 @@
+# Import convention
 import streamlit as st
 
 st.title("🎈 My new app")
+
 st.write(
-    "Let's start building! For help and inspiration, head over to [docs.streamlit.io](https://docs.streamlit.io/)."
+    "Streamlit Documentation: [docs.streamlit.io](https://docs.streamlit.io/)."
 )
+
+# Just add it after st.sidebar:
+a = st.sidebar.radio('Choose:',[1,2])
+
