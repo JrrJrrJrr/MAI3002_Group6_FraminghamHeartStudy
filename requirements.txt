@@ -15,5 +15,5 @@ statsmodels>=0.13
 jupyter
 ipykernel
 
-# Optional interactive plotting
+# Interactive plotting
 plotly>=5.0
