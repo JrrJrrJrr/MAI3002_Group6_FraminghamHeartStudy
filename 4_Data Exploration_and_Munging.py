@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 st.set_page_config(
-    page_title="Framingham Heart Study - Data Exploration",
-    page_icon="📊",
+    page_title="Framingham Heart Study - Data Exploration, Cleaning, and Feature Engineering",
+    page_icon="❤️",
     layout="wide"
 )
 
@@ -22,7 +22,7 @@ st.sidebar.markdown("""<div style="font-size: 17px;">✍️ <strong>Authors (Gro
 """, unsafe_allow_html=True)
 
 st.sidebar.write("---")
-st.sidebar.markdown("""📅 Current Analysis Version""")
+st.sidebar.markdown("""📅 December 16th, 2025""")
 
 ############################# Start Page Content #############################
 
