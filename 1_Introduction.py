@@ -2,7 +2,7 @@ import streamlit as st
 import base64
 
 st.set_page_config(
-    page_title="Covid Data Analysis - Introduction",
+    page_title="Cardiovascular disease - Introduction",
     page_icon="📊",
     #layout="wide"   
 )
@@ -47,13 +47,9 @@ st.title("Introduction")
 st.divider()
 
 st.markdown("""
-The COVID-19 pandemic emerged as a catastrophic global event, touching every corner of the world.
-This unprecedented crisis led to significant changes in our daily routines, leaving an indelible impact on our lives and
-the way we work, even after its conclusion. To date, nearly **704 million** individuals have been impacted by COVID-19,
-with the death toll surpassing **7 million**. Notably, the United States accounts for over a million of these fatalities,
-as reported by the CDC. Through this analysis, our objective is to delve into the United States' COVID-19 data to uncover
-insights regarding the pandemic's effects across various regions and demographic groups. We aim to determine if certain age
-groups were more susceptible to infection and also explore whether specific variables can predict mortality rates.
+Cardiovascular disease (CVD) is a leading cause of death worldwide and is closely linked to arterial stiffness. Pulse pressure (PP), defined as systolic minus diastolic blood pressure, is a well-established marker of arterial stiffness, with higher values indicating increased CVD risk. The Framingham Heart Study, with repeated blood pressure measurements and longitudinal follow-up of cardiovascular events, provides an ideal setting to examine whether changes in pulse pressure over time predict future CVD.
+
+In this study, we analyzed cleaned Framingham data (11,627 observations), reshaped into one row per participant (n = 3,206) with three complete visits. Pulse pressure was calculated (SYSBP − DIABP), and change between Visit 1 and Visit 2 (ΔPP) was used as the predictor, while CVD occurrence at Visit 3 served as the outcome.
 """)
 
 #st.image("./covid.png")
