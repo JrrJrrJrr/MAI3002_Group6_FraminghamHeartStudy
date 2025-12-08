@@ -259,35 +259,68 @@ st.markdown("""
 | **Final analytic sample ($\Delta PP$ & V3 outcome)** | **3,206** |
 """)
 
-st.subheader("Interactive Dataset Inspection")
+# Creating the final analytic table (1 row pp)
+# 1. Baseline covariates from Visit 1
+baseline_v1 = data[data['PERIOD'] == 1][['RANDID', 'AGE', 'SEX', 'BMI', 'SYSBP', 'DIABP', 'GLUCOSE', 'TOTCHOL', 'CIGPDAY']].copy()
+baseline_v1 = baseline_v1.add_prefix('V1_').rename(columns={'V1_RANDID': 'RANDID'})
 
-# Create a mock analytic dataset for display purposes (Merging Delta back to main attributes)
-# In the real notebook this involves more complex imputation
-analytic_mock = valid_delta.merge(data[data['PERIOD']==3][['RANDID', 'CVD', 'AGE', 'SEX']], on='RANDID', how='inner')
+# 2. Outcome from Visit 3
+outcome_v3 = data[data['PERIOD'] == 3][['RANDID', 'CVD']].copy()
 
-cvd_filter = st.radio("Filter by CVD Outcome (Visit 3):", [0, 1], format_func=lambda x: "No CVD (0)" if x==0 else "CVD Event (1)")
+# 3. Delta PP (Calculated in the previous section)
+pp_wide = data.pivot_table(index='RANDID', columns='PERIOD', values='SYSBP').reset_index() # Simplified for demo
+# (In your real app, make sure pp_delta comes from your properly calculated PP dataframe)
+# Using the mock valid_delta from previous steps:
+pp_delta = valid_delta[['RANDID', 'DELTA_PP']]
 
-subset = analytic_mock[analytic_mock['CVD'] == cvd_filter]
+st.markdown("### 7. Final analytic dataset (1 row per person)")
 
-st.write(f"**Group:** CVD = {cvd_filter}")
-st.write(f"**Number of patients:** {len(subset)}")
-st.write(f"**Mean Age:** {subset['AGE'].mean():.1f} years")
-st.dataframe(subset.head(10))
+# Show the code used for merging
+st.code("""
+# 7. Final analytic dataset (1 row per person)
+analytic = (
+    pp_delta
+      .merge(outcome_v3, on='RANDID', how='inner')   # require CVD outcome at Visit 3
+      .merge(baseline_v1, on='RANDID', how='left')   # add baseline features
+)
 
-with st.expander("👆 Expand to view analytic dataset code"):
-    st.code("""
-def select_cvd_data_analytic(cvd_status, df):
-  '''Filter the analytic dataframe on CVD yes/no.'''
-  # Filtering
-  subset = df.loc[df['CVD'] == cvd_status]
-  
-  # Extra info
-  print(f"--- Group: CVD = {cvd_status} ---")
-  print(f"Number of patients: {len(subset)}")
-  if 'V1_AGE' in subset.columns:
-    print(f"Mean age: {subset['V1_AGE'].mean():.1f} years")
-  return subset.head(10)
+print("\\nFINAL analytic dataset shape:", analytic.shape)
+analytic.head()
+""", language='python')
 
-# The interactive widget
-interact(select_cvd_data_analytic, cvd_status=sorted(analytic['CVD'].unique()), df=fixed(analytic));
-    """)
+# Perform the actual merge in the app
+analytic = (
+    pp_delta
+      .merge(outcome_v3, on='RANDID', how='inner')
+      .merge(baseline_v1, on='RANDID', how='left')
+)
+
+# Display the print output
+st.text(f"FINAL analytic dataset shape: {analytic.shape}")
+
+# Display the table 
+st.dataframe(analytic.head())
+
+# Interactive Plotting Widget
+var_to_plot = st.selectbox("Select Variable:", ['DELTA_PP', 'V1_AGE', 'V1_BMI', 'V1_SYSBP', 'V1_TOTCHOL'])
+split_by = st.radio("Split by:", ["CVD", "V1_SEX"], horizontal=True)
+
+# Plotting logic
+fig_comp = px.box(analytic, x=split_by, y=var_to_plot, 
+                  color=split_by, 
+                  title=f"Distribution of {var_to_plot} by {split_by}",
+                  labels={"CVD": "CVD Event (0=No, 1=Yes)", "V1_SEX": "Sex (1=Male, 2=Female)"})
+st.plotly_chart(fig_comp)
+
+st.subheader("Machine Learning Setup")
+st.markdown("We defined the following features for our predictive models:")
+feature_cols = [
+    "DELTA_PP", "V1_AGE", "V1_SEX", "V1_BMI", 
+    "V1_SYSBP", "V1_DIABP", "V1_GLUCOSE", 
+    "V1_TOTCHOL", "V1_CIGPDAY"
+]
+st.code(f"feature_cols = {feature_cols}", language="python")
+
+st.markdown("""
+The data was split into training and testing sets (stratified by CVD outcome) to account for class imbalance.
+""")
