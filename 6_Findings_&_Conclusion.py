@@ -1,5 +1,37 @@
 import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import matplotlib.pyplot as plt
+import seaborn as sns
 
+st.set_page_config(
+    page_title="Framingham Heart Study - Data Exploration, Cleaning, and Feature Engineering",
+    page_icon="❤️",
+    layout="wide"
+)
+
+# Sidebar Authors
+st.sidebar.markdown("""<div style="font-size: 17px;">✍️ <strong>Authors (Group 6):</strong></div> 
+\n&nbsp;                                  
+<div style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Cleo Habets&nbsp;&nbsp;</div><br>              
+
+<div style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Jerrica Pubben&nbsp;&nbsp;</div><br>              
+                  
+<div style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Noura al Sayed&nbsp;&nbsp;</div><br>
+""", unsafe_allow_html=True)
+
+st.sidebar.write("---")
+st.sidebar.markdown("""📅 December 16th, 2025""")
+
+############################# Start Page Content #############################
+
+st.title("Data Exploration and Munging")
+st.divider()
+
+# -----------------------------------------------------------------------------
+# 7. Model Results & Conclusion
+# -----------------------------------------------------------------------------
 st.header("7. Model Results & Conclusion")
 st.divider()
 
@@ -97,8 +129,8 @@ st.subheader("Final Conclusion")
 st.markdown("""
 Based on our analysis of the Framingham Heart Study dataset:
 
-1.  **Best Performing Models:** The **Gradient Boosting** and **Random Forest** models consistently achieved the highest ROC AUC scores (approx 0.76 - 0.78). This suggests that ensemble methods are most effective at capturing the non-linear relationships in cardiovascular risk factors.
-2.  **Predictive Value of $\Delta$PP:** The inclusion of the change in Pulse Pressure ($\Delta$PP) improved model sensitivity compared to baseline blood pressure alone, validating our research question.
-3.  **Accuracy vs. Utility:** While the *Dummy Classifier* had high accuracy (~85%), it had no predictive power (AUC = 0.5). Our trained models, while sometimes having lower raw accuracy due to the trade-off for sensitivity (recall), are far more useful for identifying at-risk patients.
-4.  **Clinical Implication:** A machine learning approach using longitudinal blood pressure changes can successfully stratify patients by risk, potentially allowing for earlier intervention before a CVD event occurs.
+1.  **Best Performing Models: ....
+2.  **Predictive Value of $\Delta$PP:** .....
+3.  **Accuracy vs. Utility:** 
+4.  **Clinical Implication:** 
 """)
