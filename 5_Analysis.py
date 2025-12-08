@@ -1,520 +1,451 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from scipy.stats import chisquare
-from imblearn.over_sampling import SMOTE
-from sklearn.model_selection import train_test_split
-from imblearn.pipeline import Pipeline
-from imblearn.under_sampling import RandomUnderSampler
-import statsmodels.api as sm
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-st.set_page_config(
-    page_title="Covid Data Analysis - Analysis",
-    page_icon="📊",
-    #layout="wide"   
+# ML Imports
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, roc_curve, classification_report
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+from sklearn.dummy import DummyClassifier
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
+
+# Tensorflow / Keras for Model 9
+import tensorflow as tf
+from tensorflow import keras
+
+# -----------------------------------------------------------------------------
+# 6. Machine Learning: Setup & Preprocessing
+# -----------------------------------------------------------------------------
+st.header("6. Machine Learning Analysis")
+st.divider()
+
+st.subheader("Setup and Feature Selection")
+st.markdown("""
+To predict CVD events, we set up a machine learning pipeline. 
+We defined our feature set including the calculated **$\Delta$Pulse Pressure** and baseline covariates.
+""")
+
+# 1. Define Features and Target
+feature_cols = [
+    "DELTA_PP", "V1_AGE", "V1_SEX", "V1_BMI",
+    "V1_SYSBP", "V1_DIABP", "V1_GLUCOSE",
+    "V1_TOTCHOL", "V1_CIGPDAY"
+]
+
+st.code(f"""
+feature_cols = {feature_cols}
+X = analytic[feature_cols]
+y = analytic["CVD"]
+""", language="python")
+
+# Prepare X and y (Live execution)
+# Ensure 'analytic' from previous section is available. 
+# If running standalone, we filter the mock/loaded data again:
+if 'analytic' not in locals():
+    st.error("Please run the 'Analytic Dataset' section first to generate the data.")
+else:
+    X = analytic[feature_cols].copy()
+    y = analytic["CVD"].copy()
+
+    # Fill basic NaNs for the demo if any remain (Pipeline usually handles this)
+    X = X.fillna(X.mean()) 
+
+    st.subheader("Train/Test Split & Class Imbalance")
+    st.markdown("""
+    We split the data into training (80%) and testing (20%) sets, stratified by the CVD outcome to maintain class proportions.
+    We also address the class imbalance (approx 1.5% CVD cases in original data) using **SMOTE** (Synthetic Minority Over-sampling Technique) within our pipeline.
+    """)
+
+    # Train/Test Split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, stratify=y, random_state=3002
+    )
+
+    with st.expander("👆 Expand to view Split & Pipeline code"):
+        st.code("""
+from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+# Train/Test Split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=3002
 )
-#st.markdown("""<style>body {zoom: 1.4;  /* Adjust this value as needed */}</style>""", unsafe_allow_html=True)
 
-st.sidebar.markdown("""<div style="font-size: 17px;">✍️ <strong>Authors:</strong></div> 
-\n&nbsp;                                  
-<a href="https://www.linkedin.com/in/amralshatnawi/" style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; text-decoration: none; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Amr Alshatnawi&nbsp;&nbsp;</a><br>             
+# Preprocessing Pipeline structure
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('smote', SMOTE(random_state=42)),
+    ('model', Classifier())
+])
+        """)
 
-<a href="https://www.linkedin.com/in/hailey-pangburn" style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; text-decoration: none; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Hailey Pangburn&nbsp;&nbsp;</a><br>             
-                    
-<a href="mailto:mcmasters@uchicago.edu" style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; text-decoration: none; font-size: 15px; border-radius: 4px;">Richard McMasters</a><br>
-""", unsafe_allow_html=True)
-
-st.sidebar.write("---")
-st.sidebar.markdown("""📅 March 9th, 2024""")
-st.sidebar.image("Ulogo.png")
-
-############################# start page content #############################
-
-st.title("Analysis")
-st.divider()
-
-#data = pd.read_csv("systematic_sampled_covid_data.csv", na_values=['Missing', 'Unknown', 'NA', 'NaN', '', ' '])
-
-# data
-csv_url = "https://www.dropbox.com/scl/fi/3ssnswv3158des6o0102v/systematic_sampled_covid_data_1M.csv?rlkey=kmf3ym19wdl3bq006fii5mcqa&st=8h53tkov&dl=1"
-data = pd.read_csv(csv_url, na_values=['Missing', 'Unknown', 'NA', 'NaN', '', ' '])
-
-st.header("""Is there a significant difference in COVID-19 case counts between different age groups?""")
-
-st.markdown("""To address the question of whether there is a significant difference in COVID-19 case counts between different
-               age groups, relative to the population size of those groups, we examined the distribution of cases across
-               each age category. Initially, we hypothesized that the distribution of cases would be proportional to the
-               population sizes of the various age groups. To lay the groundwork for our analysis,
-               we started by calculating the case counts for each age group.""")
-
-case_counts_by_age_group = data['age_group'].value_counts().sort_index()
-df_age_case = case_counts_by_age_group.reset_index()
-
-df_age_case.columns = ['Age_Group', 'Count_of_Cases']
-
-st.dataframe(df_age_case.head())
-
-with st.expander("👆 Expand to view code"):
-    st.code("""
-# data
-csv_url = "https://www.dropbox.com/scl/fi/3ssnswv3158des6o0102v/systematic_sampled_covid_data_1M.csv?rlkey=kmf3ym19wdl3bq006fii5mcqa&st=8h53tkov&dl=1"
-data = pd.read_csv(csv_url, na_values=['Missing', 'Unknown', 'NA', 'NaN', '', ' '])
-case_counts_by_age_group = data['age_group'].value_counts().sort_index()
-df_age_case = case_counts_by_age_group.reset_index()
-
-df_age_case.columns = ['Age_Group', 'Count_of_Cases']
-
-df_age_case.head()
-""")
-    
-# plot the results
-fig = px.bar(df_age_case, x='Age_Group', y='Count_of_Cases',
-             labels={'Age_Group': 'Age Group', 'Count_of_Cases': 'Number of Cases'},
-             title='Summary of COVID-19 Cases by Age Group', 
-             color='Age_Group')
-fig.update_xaxes(tickangle=45)
-
-st.plotly_chart(fig)
-
-with st.expander("👆 Expand to view code"):
-    st.code("""
-# plot the results
-fig = px.bar(df_age_case, x='Age_Group', y='Count_of_Cases',
-             labels={'Age_Group': 'Age Group', 'Count_of_Cases': 'Number of Cases'},
-             title='Summary of COVID-19 Cases by Age Group')
-fig.update_xaxes(tickangle=45)
-fig.show()
-
-""")
-    
-st.markdown("""Observing the bar graph above reveals that the distribution of cases across most age groups is relatively similar,
-                with a notable exception. The 18 to 49 age group exhibits a significant discrepancy,
-                displaying a noticeably higher number of cases in comparison to the other groups.
-            """)
-
-st.markdown("""To determine if these observed differences are statistically significant,
-                we utilized the Chi-square goodness-of-fit test. This test allowed us to compare the actual
-                distribution of cases across age groups against the expected distribution based on the population
-                sizes of each age group.
-            """)
-
-st.subheader("chi square goodness of fit test results")
-#########################################################################
-# Population sizes for each age group
-populations = {'0-17 years': 74000000, '18-49 years': 132000000, '50-64 years': 64000000, '65+ years': 53000000}
-
-# Observed COVID-19 cases
-observed_cases = {'0-17 years': 171498, '18-49 years': 518457, '50-64 years': 188827, '65+ years': 145737}
-
-total_population = sum(populations.values())
-total_cases = sum(observed_cases.values())
-
-expected_cases = {}
-for group in populations:
-    proportion_of_population = populations[group] / total_population
-    expected_cases[group] = proportion_of_population * total_cases
-
-# Convert observed and expected cases to lists
-observed = list(observed_cases.values())
-expected = list(expected_cases.values())
-
-# Perform the Chi-square goodness-of-fit test
-chi2_stat, p_value = chisquare(observed, f_exp=expected)
-
-
-# create dataframe to show test results 
-results = {
-    'P-Value': [p_value],
-    'Chi-square_Statistic': [chi2_stat]
-}
-results_df = pd.DataFrame(results)
-
-# Format the p-value 
-results_df['P-Value'] = results_df['P-Value'].apply(lambda x: f"{x:.4f}")
-
-st.dataframe(results_df)
-
-st.markdown("""With the p-value being less than 0.05, we reject the null hypothesis.
-               This low p-value indicates that the actual distribution of COVID-19 cases across age groups does not align
-               with the distribution expected from the population sizes of these groups, marking the observed differences
-               in distribution as statistically significant. Such variations could stem from numerous factors,
-               including but not limited to, differences in social behaviors, types of employment, or varying levels
-               of exposure risk among the age groups.
-""")
-st.success("H1: The distribution of COVID-19 cases across age groups is not proportional to the population distribution of those age groups, suggesting that, relative to their population size, certain age groups are more likely to contract COVID-19 than others.")
-
-with st.expander("👆 Expand to view code"):
-    st.code("""
-from scipy.stats import chisquare
-
-# Population sizes for each age group
-populations = {'0-17 years': 74000000, '18-49 years': 132000000, '50-64 years': 64000000, '65+ years': 53000000}
-
-# Observed COVID-19 cases
-observed_cases = {'0-17 years': 171498, '18-49 years': 518457, '50-64 years': 188827, '65+ years': 145737}
-
-total_population = sum(populations.values())
-total_cases = sum(observed_cases.values())
-
-expected_cases = {}
-for group in populations:
-    proportion_of_population = populations[group] / total_population
-    expected_cases[group] = proportion_of_population * total_cases
-
-# Convert observed and expected cases to lists in the same order
-observed = list(observed_cases.values())
-expected = list(expected_cases.values())
-
-# Perform the Chi-square goodness-of-fit test
-chi2_stat, p_value = chisquare(observed, f_exp=expected)
-
-
-# create dataframe to show test results 
-results = {
-    'P-Value': [p_value],
-    'Chi-square_Statistic': [chi2_stat]
-}
-results_df = pd.DataFrame(results)
-
-# Format the p-value 
-results_df['P-Value'] = results_df['P-Value'].apply(lambda x: f"{x:.4f}")
+# -----------------------------------------------------------------------------
+# HELPER: Unified Evaluation Function for the App
+# -----------------------------------------------------------------------------
+def app_evaluate_model(name, model, X_train, y_train, X_test, y_test):
+    """
+    Trains a model (live), makes predictions, and displays metrics in Streamlit.
+    """
+    with st.spinner(f"Training {name}..."):
+        # Train
+        model.fit(X_train, y_train)
+        
+        # Predict
+        y_pred = model.predict(X_test)
+        # Check if model supports probabilities
+        if hasattr(model, "predict_proba"):
+            y_proba = model.predict_proba(X_test)[:, 1]
+        else:
+            y_proba = np.zeros(len(y_pred)) # Fallback if no proba
             
-results_df.head()
+        # Metrics
+        acc = accuracy_score(y_test, y_pred)
+        auc = roc_auc_score(y_test, y_proba) if hasattr(model, "predict_proba") else 0.5
+        
+        st.success(f"**{name} Trained Successfully!**")
+        
+        # Display Metrics
+        col1, col2 = st.columns(2)
+        col1.metric("Accuracy", f"{acc:.2%}")
+        col2.metric("ROC AUC", f"{auc:.3f}")
+        
+        # Confusion Matrix
+        st.write("Confusion Matrix:")
+        cm = confusion_matrix(y_test, y_pred)
+        fig, ax = plt.subplots(figsize=(4, 3))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+                    xticklabels=['No CVD', 'CVD'], yticklabels=['No CVD', 'CVD'])
+        plt.xlabel('Predicted')
+        plt.ylabel('Actual')
+        st.pyplot(fig)
+        
+    return model
+
+# -----------------------------------------------------------------------------
+# SECTION: ML Models
+# -----------------------------------------------------------------------------
+st.header("Machine Learning Models")
+st.markdown("""
+We tested 9 different models to predict CVD events. 
+For each model, we used a **Pipeline** that includes:
+1. **Preprocessing:** Standard Scaling for numeric features.
+2. **Resampling:** SMOTE to handle the class imbalance.
+3. **Classifier:** The specific algorithm.
 """)
-    
+
+# -----------------------------------------------------------------------------
+# Model 1: Logistic Regression
+# -----------------------------------------------------------------------------
+st.subheader("Model 1: Logistic Regression (Baseline)")
+with st.expander("See Pipeline & Parameters"):
+    st.code("""
+# Pipeline
+logreg_pipe = Pipeline(steps=[
+    ("scaler", StandardScaler()),
+    ("smote", SMOTE(random_state=42)),
+    ("model", LogisticRegression(solver="saga", max_iter=5000))
+])
+
+# Parameter Grid
+logreg_param_grid = {
+    "model__penalty": ["elasticnet"],
+    "model__l1_ratio": [0, 0.5, 1],
+    "model__C": [0.01, 0.1, 1, 10]
+}
+    """, language='python')
+
+if st.button("Run Logistic Regression"):
+    model = ImbPipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("smote", SMOTE(random_state=42)),
+        ("model", LogisticRegression(solver="saga", max_iter=1000, random_state=42))
+    ])
+    app_evaluate_model("Logistic Regression", model, X_train, y_train, X_test, y_test)
+
 st.divider()
 
-################################################## Start logistic Regression ##################################################
-
-st.header("Do gender, age group, and case year significantly associate with COVID-19 mortality outcomes?")
-
-csv_url = "https://www.dropbox.com/scl/fi/3ssnswv3158des6o0102v/systematic_sampled_covid_data_1M.csv?rlkey=kmf3ym19wdl3bq006fii5mcqa&st=8h53tkov&dl=1"
-data_LR = pd.read_csv(csv_url, na_values=['Missing', 'Unknown', 'NA', 'NaN','Other'])
-
-# List of columns to drop
-columns_to_drop = ['res_county', 'res_state', 'current_status', 'state_fips_code', 'county_fips_code',
-                    'process', 'exposure_yn', 'symptom_status', 'hosp_yn', 'icu_yn', 'ethnicity',
-                      'underlying_conditions_yn','case_positive_specimen_interval', 'case_onset_interval', 'race']
-
-# Drop columns not need for Logistic Regression
-data_LR = data_LR.drop(columns=columns_to_drop, axis=1)
-
-# Replace 'Missing', 'Unknown', 'NA', 'NaN' with NaN to standardize missing values
-data_LR.replace(['Missing', 'Unknown', 'NA', 'NaN', '', ' '], pd.NA, inplace=True)
-
-# Dropping rows with missing values in any column
-data_LR = data_LR.dropna()
-
-
-# Grouping age
-data_LR['age_group'] = data_LR['age_group'].replace({
-    '0 - 17 years': '0 - 64 years',
-    '18 to 49 years': '0 - 64 years',
-})
-
-# Ensure 'death_yn' is numeric
-data_LR['death_yn'] = data_LR['death_yn'].map({'Yes': 1, 'No': 0})
-
-
-# Convert case_month to datetime and extract useful features
-data_LR['case_month'] = pd.to_datetime(data_LR['case_month'], format='%Y-%m')
-data_LR['year'] = data_LR['case_month'].dt.year
-data_LR['year'] = data_LR['year'].astype(str)
-
-# Group 2023 and 2024 together
-data_LR['year'].replace({'2022': '2022 or later', '2023': '2022 or later', '2024': '2022 or later'}, inplace=True)
-
-# Creating dummy variables
-data_LR = pd.get_dummies(data_LR, columns=['sex', 'age_group', 'year'], drop_first=True)
-
-st.markdown("""
-To address our research question, we chose logistic regression as our method of analysis.
-Our intention was to focus exclusively on a predefined set of variables: gender, age group, and case year, for our model.
-Thus, we initiated our process by refining our dataset to solely encompass these selected predictors along with the
-dependent variable, which is mortality. We streamlined the age categories into three distinct groups: 0-49 years, 50-64 years,
-and 65 years and above, for clarity and simplicity. Furthermore, we adapted the case month data to extract only the year,
-consolidating all cases from 2022 onwards into a single category. This approach resulted in our analysis spanning the years
-2020, 2021, and "2022 or later." In preparation for logistic regression, we transformed our predictors into dummy variables.
-This diligent data preparation reduced our dataset to **306,929 rows**. Below is head of the dataframe showcasing our data structure. 
-""")
-
-st.dataframe(data_LR.drop(['case_month'], axis=1).head())
-
-with st.expander("👆 Expand to view code"):
+# -----------------------------------------------------------------------------
+# Model 2: Decision Tree
+# -----------------------------------------------------------------------------
+st.subheader("Model 2: Decision Tree")
+with st.expander("See Pipeline & Parameters"):
     st.code("""
-csv_url = "https://www.dropbox.com/scl/fi/3ssnswv3158des6o0102v/systematic_sampled_covid_data_1M.csv?rlkey=kmf3ym19wdl3bq006fii5mcqa&st=8h53tkov&dl=1"
-data_LR = pd.read_csv(csv_url, na_values=['Missing', 'Unknown', 'NA', 'NaN','Other'])
-
-# List of columns to drop
-columns_to_drop = ['res_county', 'res_state', 'current_status', 'state_fips_code', 'county_fips_code',
-                    'process', 'exposure_yn', 'symptom_status', 'hosp_yn', 'icu_yn', 'ethnicity',
-                      'underlying_conditions_yn','case_positive_specimen_interval', 'case_onset_interval', 'race']
-
-# Drop columns not need for Logistic Regression
-data_LR = data_LR.drop(columns=columns_to_drop, axis=1)
-
-# Replace 'Missing', 'Unknown', 'NA', 'NaN' with NaN to standardize missing values
-data_LR.replace(['Missing', 'Unknown', 'NA', 'NaN', '', ' '], pd.NA, inplace=True)
-
-# Dropping rows with missing values in any column
-data_LR = data_LR.dropna()
-
-
-# Grouping age
-data_LR['age_group'] = data_LR['age_group'].replace({
-    '0 - 17 years': '0 - 64 years',
-    '18 to 49 years': '0 - 64 years',
-})
-
-# Ensure 'death_yn' is numeric
-data_LR['death_yn'] = data_LR['death_yn'].map({'Yes': 1, 'No': 0})
-
-
-# Convert case_month to datetime and extract useful features
-data_LR['case_month'] = pd.to_datetime(data_LR['case_month'], format='%Y-%m')
-data_LR['year'] = data_LR['case_month'].dt.year
-data_LR['year'] = data_LR['year'].astype(str)
-
-# Group 2023 and 2024 together
-data_LR['year'].replace({'2022': '2022 or later', '2023': '2022 or later', '2024': '2022 or later'}, inplace=True)
-
-# Creating dummy variables
-data_LR = pd.get_dummies(data_LR, columns=['sex', 'age_group', 'year'], drop_first=True)
-""")
-    
-st.markdown("""
-Once our data was prepared, we proceeded to divide it into training and testing subsets,
-allocating **20%** for testing and the remaining **80%** for training purposes. We observed an imbalance in our dataset,
-with the minority class comprising only **4,702 rows (1.5%)** and the majority class accounting for **302,227 rows (98.5%)**.
-Despite this imbalance, we chose to proceed with our logistic regression analysis to assess its impact on the statistical
-outcomes.
-""")
-
-# Getting the data ready for splitting
-X = data_LR.drop(['death_yn', 'case_month'], axis=1)  
-y = data_LR['death_yn']
-
-# Splitting the dataset into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-
-st.subheader("Logistic Regression results using imbalanced data")
-########################## using imbalanced data ##########################
-# Adding a constant to the model for the intercept
-X_train_sm = sm.add_constant(X_train)
-
-X_train_sm = X_train_sm.astype(float)
-
-# Fit the logistic regression model
-logit_model = sm.Logit(y_train, X_train_sm)
-result = logit_model.fit()
-
-st.write(result.summary())
-
-with st.expander("👆 Expand to view code"):
-    st.code("""
-# Getting the data ready for splitting
-X = data_LR.drop(['death_yn', 'case_month'], axis=1)  
-y = data_LR['death_yn']
-
-# Splitting the dataset into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-########################## using imbalanced data ##########################
-# Adding a constant to the model for the intercept
-X_train_sm = sm.add_constant(X_train)
-
-X_train_sm = X_train_sm.astype(float)
-
-# Fit the logistic regression model
-logit_model = sm.Logit(y_train, X_train_sm)
-result = logit_model.fit()
-
-print(result.summary())
-
-""")
-    
-st.markdown("""
-In our logistic regression model, all predictor variables are statistically significant, with **p-values of less than 0.05**.
-In addition, the model's Likelihood Ratio **(LLR) p-value is also 0**, indicating that overall, the model is statistically significant.
-These findings affirm the robustness and relevance of our predictors in relation to the outcome variable.
-""")
-
-st.markdown("""
-However, training a model on imbalanced data can lead to several challenges,
-including bias towards the majority class, misleading accuracy metrics, and potential overfitting to the majority class.
-To address these concerns, we implemented a resampling strategy to balance the dataset more effectively. Initially,
-we undersampled the majority class using a **RandomUnderSampler**, targeting a ratio of 0.1. This ratio aimed to adjust the
-dataset so that the minority class would represent approximately **10%** of the majority class's size. To further balance the
-dataset, we employed the Synthetic Minority Over-sampling Technique **(SMOTE)** for oversampling the minority class. With a
-sampling ratio of **0.5**, our goal was to increase the minority class size to half that of the majority class post-oversampling.
-This two-step resampling process was designed to mitigate the risks associated with imbalanced datasets and improve
-the model's overall performance. Then we utilized the resampled data to investigate its impact on the outcomes
-of the logistic regression analysis.
-""")
-
-####################################
-
-# creating resampled dataset to adjust for data imbalance
-resampling_strategy = Pipeline([
-    ('undersample', RandomUnderSampler(sampling_strategy=0.1)),  
-    ('oversample', SMOTE(sampling_strategy=0.5))
+# Pipeline
+dt_pipe = Pipeline(steps=[
+    ("scaler", StandardScaler()),
+    ("smote", SMOTE(random_state=42)),
+    ("model", DecisionTreeClassifier(random_state=42))
 ])
 
-# resampled dataset for training
-x_resampled, y_resampled = resampling_strategy.fit_resample(X_train.astype(float), y_train)
+# Parameter Grid
+dt_param_grid = {
+    "model__max_depth": [3, 5, 7, 10],
+    "model__min_samples_leaf": [5, 10, 20],
+    "model__ccp_alpha": [0.0, 0.001, 0.01]
+}
+    """, language='python')
 
+if st.button("Run Decision Tree"):
+    # Using specific params to avoid overfitting in demo
+    model = ImbPipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("smote", SMOTE(random_state=42)),
+        ("model", DecisionTreeClassifier(max_depth=5, min_samples_leaf=10, random_state=42))
+    ])
+    app_evaluate_model("Decision Tree", model, X_train, y_train, X_test, y_test)
 
-########################## using Undersampled and Oversampled data ##########################
+st.divider()
 
-st.subheader("Logistic Regression results using Undersampled and Oversampled data")
-
-# Adding a constant to the model for the intercept
-X_train_sm_1 = sm.add_constant(x_resampled)
-
-X_train_sm_1 = X_train_sm_1.astype(float)
-
-# Fit the logistic regression model
-logit_model_1 = sm.Logit(y_resampled, X_train_sm_1)
-result_1 = logit_model_1.fit()
-
-# Print the summary of the regression
-st.write(result_1.summary())
-
-with st.expander("👆 Expand to view code"):
+# -----------------------------------------------------------------------------
+# Model 3: Random Forest
+# -----------------------------------------------------------------------------
+st.subheader("Model 3: Random Forest")
+with st.expander("See Pipeline & Parameters"):
     st.code("""
-
-# creating resampled dataset to adjust for data imbalance
-resampling_strategy = Pipeline([
-    ('undersample', RandomUnderSampler(sampling_strategy=0.1)),  
-    ('oversample', SMOTE(sampling_strategy=0.5))
+# Pipeline
+rf_pipe = Pipeline(steps=[
+    ("scaler", StandardScaler()),
+    ("smote", SMOTE(random_state=42)),
+    ("model", RandomForestClassifier(random_state=42))
 ])
 
-# resampled dataset for training
-x_resampled, y_resampled = resampling_strategy.fit_resample(X_train.astype(float), y_train)
+# Parameter Grid
+rf_param_grid = {
+    "model__n_estimators": [200, 400],
+    "model__max_depth": [10, 15, None],
+    "model__max_features": ["sqrt", "log2"],
+    "model__max_samples": [0.7, 0.9]
+}
+    """, language='python')
 
+if st.button("Run Random Forest"):
+    model = ImbPipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("smote", SMOTE(random_state=42)),
+        ("model", RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42))
+    ])
+    app_evaluate_model("Random Forest", model, X_train, y_train, X_test, y_test)
 
-########################## using Undersampled and Oversampled data ##########################
+st.divider()
 
-
-# Adding a constant to the model for the intercept
-X_train_sm_1 = sm.add_constant(x_resampled)
-
-X_train_sm_1 = X_train_sm_1.astype(float)
-
-# Fit the logistic regression model
-logit_model_1 = sm.Logit(y_resampled, X_train_sm_1)
-result_1 = logit_model_1.fit()
-
-# Print the summary of the regression
-print(result_1.summary())
-
-""")
-    
-st.markdown("""
-Upon applying the resampled data to our logistic regression model, we observed minimal changes in the results.
-All predictors retained their significance, showing coefficients that were very similar to those obtained with the
-original dataset. Also, the model retained its overall significance. A notable change, however, was observed in the
-intercept's (constant) coefficient, which shifted from **-7.1371 to -3.8469** in terms of log odds. This shift suggests that,
-within the context of a more balanced dataset, the baseline probability of death when controlling all other variables
-is higher compared to what was noted with the imbalanced dataset. Given these results, we reject the null hypothesis and
-find significant evidence to suggest that gender, age group, and case year significantly predict COVID-19 mortality.
-""")
-
-st.success("H1: Gender, age group, and case year significantly predict COVID-19 mortality.")
-
-st.write("")
-########################## fit the model and predict on test set ##########################
-
-st.markdown("Next, we proceeded to fit the model using the resampled data, and predict on the test dataset.")
-# Initialize the logistic regression model
-logreg = LogisticRegression(solver='liblinear', random_state=42)
-
-# Fit the model on the training data
-logreg.fit(x_resampled, y_resampled)
-
-# predict on the original unmodified test set
-y_pred = logreg.predict(X_test)
-
-cm = confusion_matrix(y_test, y_pred)
-# Extracting True Negatives, False Positives, False Negatives, and True Positives
-tn, fp, fn, tp = cm.ravel()
-
-# Calculating metrics
-accuracy = accuracy_score(y_test, y_pred)
-precision = precision_score(y_test, y_pred)
-Sensitivity = recall_score(y_test, y_pred) 
-specificity = tn / (tn + fp)
-f1 = f1_score(y_test, y_pred)
-
-
-test_results = pd.DataFrame({
-    'Metric': ['Accuracy', 'Precision', 'Sensitivity (Recall)', 'Specificity', 'F1 Score'],
-    'Value': [accuracy, precision, Sensitivity, specificity, f1]
-})
-
-st.dataframe(test_results)
-
-st.markdown("""
-
-The confusion matrix table above highlights the model's performance, showcasing an overall accuracy of **89.94%**, effectively predicting
-true positives and negatives. However, its precision at **10.62%** reveals a significant proportion of false positives. The model demonstrates a strong ability to detect actual deaths, with a sensitivity
-of **81.44%**, and accurately identifies **90.07%** of true negatives, showcasing its effectiveness in recognizing survivors of
-COVID-19. Despite these strengths, a low F1 score of **0.1879** indicates a challenge in achieving a balance between precision
-and sensitivity, reflecting the model's tendency to favor sensitivity at the expense of higher false positive rates.
-""")
-with st.expander("👆 Expand to view code"):
+# -----------------------------------------------------------------------------
+# Model 4: K-Nearest Neighbors (KNN)
+# -----------------------------------------------------------------------------
+st.subheader("Model 4: K-Nearest Neighbors (KNN)")
+with st.expander("See Pipeline & Parameters"):
     st.code("""
-########################## fit the model and predict on test set ##########################
-# Initialize the logistic regression model
-logreg = LogisticRegression(solver='liblinear', random_state=42)
+# Pipeline
+knn_pipe = Pipeline(steps=[
+    ("scaler", StandardScaler()),
+    ("smote", SMOTE(random_state=42)),
+    ("model", KNeighborsClassifier())
+])
 
-# Fit the model on the training data
-logreg.fit(x_resampled, y_resampled)
+# Parameter Grid
+knn_param_grid = {
+    "model__n_neighbors": [9, 15, 25],
+    "model__weights": ["uniform", "distance"],
+    "model__p": [1, 2] # 1=Manhattan, 2=Euclidean
+}
+    """, language='python')
 
-# predict on the original unmodified test set
-y_pred = logreg.predict(X_test)
+if st.button("Run KNN"):
+    model = ImbPipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("smote", SMOTE(random_state=42)),
+        ("model", KNeighborsClassifier(n_neighbors=15))
+    ])
+    app_evaluate_model("KNN", model, X_train, y_train, X_test, y_test)
 
+st.divider()
 
-cm = confusion_matrix(y_test, y_pred)
-# Extracting True Negatives, False Positives, False Negatives, and True Positives
-tn, fp, fn, tp = cm.ravel()
-
-# Calculating metrics
-accuracy = accuracy_score(y_test, y_pred)
-precision = precision_score(y_test, y_pred)
-Sensitivity = recall_score(y_test, y_pred) 
-specificity = tn / (tn + fp)
-f1 = f1_score(y_test, y_pred)
-
-
-test_results = pd.DataFrame({
-    'Metric': ['Accuracy', 'Precision', 'Sensitivity (Recall)', 'Specificity', 'F1 Score'],
-    'Value': [accuracy, precision, Sensitivity, specificity, f1]
-})
-
-test_results.head()
-""")
-
-########################## Plotting confusion matrix ##########################
-
-disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['No Death', 'Death'])
-disp.plot(cmap='Reds')
-plt.title('Confusion Matrix for COVID-19 Mortality Prediction')
-st.pyplot(plt)
-
-st.markdown("""
-Displayed above is the confusion matrix, offering a visual representation of True Positives (TP),
-True Negatives (TN), False Positives (FP), and False Negatives (FN).
-""")
-with st.expander("👆 Expand to view code"):
+# -----------------------------------------------------------------------------
+# Model 5: Support Vector Machine (SVM)
+# -----------------------------------------------------------------------------
+st.subheader("Model 5: Linear SVM")
+with st.expander("See Pipeline & Parameters"):
     st.code("""
-disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['No Death', 'Death'])
-disp.plot(cmap='Reds')
-plt.title('Confusion Matrix for COVID-19 Mortality Prediction')
-plt.show()
-""")
+# Pipeline
+svm_pipe = Pipeline(steps=[
+    ("scaler", StandardScaler()),
+    ("smote", SMOTE(random_state=42)),
+    ("model", SVC(probability=True, random_state=42))
+])
+
+# Parameter Grid
+svm_param_grid = {
+    "model__C": [0.1, 1, 10, 100],
+    "model__gamma": ["scale", 0.01, 0.1],
+    "model__kernel": ["rbf"]
+}
+    """, language='python')
+
+if st.button("Run SVM"):
+    model = ImbPipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("smote", SMOTE(random_state=42)),
+        ("model", SVC(probability=True, C=1.0, kernel='rbf', random_state=42))
+    ])
+    app_evaluate_model("SVM", model, X_train, y_train, X_test, y_test)
+
+st.divider()
+
+# -----------------------------------------------------------------------------
+# Model 6: Gradient Boosting
+# -----------------------------------------------------------------------------
+st.subheader("Model 6: Gradient Boosting Classifier")
+with st.expander("See Pipeline & Parameters"):
+    st.code("""
+# Pipeline
+gb_pipe = Pipeline(steps=[
+    ("scaler", StandardScaler()),
+    ("smote", SMOTE(random_state=42)),
+    ("model", GradientBoostingClassifier(random_state=42))
+])
+
+# Parameter Grid
+gb_param_grid = {
+    "model__n_estimators": [200, 500],
+    "model__learning_rate": [0.01, 0.05],
+    "model__max_depth": [3, 4],
+    "model__subsample": [0.8, 1.0]
+}
+    """, language='python')
+
+if st.button("Run Gradient Boosting"):
+    model = ImbPipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("smote", SMOTE(random_state=42)),
+        ("model", GradientBoostingClassifier(n_estimators=100, learning_rate=0.05, random_state=42))
+    ])
+    app_evaluate_model("Gradient Boosting", model, X_train, y_train, X_test, y_test)
+
+st.divider()
+
+# -----------------------------------------------------------------------------
+# Model 7: Neural Network (MLP)
+# -----------------------------------------------------------------------------
+st.subheader("Model 7: Neural Network (MLP Sklearn)")
+with st.expander("See Pipeline & Parameters"):
+    st.code("""
+# Pipeline
+mlp_pipe = Pipeline(steps=[
+    ("scaler", StandardScaler()),
+    ("smote", SMOTE(random_state=42)),
+    ("model", MLPClassifier(early_stopping=True, max_iter=1000, random_state=42))
+])
+
+# Parameter Grid
+mlp_param_grid = {
+    "model__hidden_layer_sizes": [(64, 32), (100,)],
+    "model__alpha": [0.001, 0.01, 0.1],
+    "model__learning_rate_init": [0.001, 0.005]
+}
+    """, language='python')
+
+if st.button("Run MLP (Sklearn)"):
+    model = ImbPipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("smote", SMOTE(random_state=42)),
+        ("model", MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=500, random_state=42))
+    ])
+    app_evaluate_model("MLP Neural Network", model, X_train, y_train, X_test, y_test)
+
+st.divider()
+
+# -----------------------------------------------------------------------------
+# Model 8: Dummy Classifier (Baseline)
+# -----------------------------------------------------------------------------
+st.subheader("Model 8: Dummy Classifier (Reference)")
+st.markdown("A baseline model that always predicts the most frequent class. Useful to check if other models are actually learning.")
+
+if st.button("Run Dummy Classifier"):
+    model = ImbPipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("model", DummyClassifier(strategy="most_frequent"))
+    ])
+    app_evaluate_model("Dummy Classifier", model, X_train, y_train, X_test, y_test)
+
+st.divider()
+
+# -----------------------------------------------------------------------------
+# Model 9: Neural Network (TensorFlow/Keras)
+# -----------------------------------------------------------------------------
+st.subheader("Model 9: Neural Network (TensorFlow)")
+st.markdown("A custom Feed-Forward Neural Network built with Keras/TensorFlow.")
+
+with st.expander("See Keras Model Builder Code"):
+    st.code("""
+def build_tf_model(input_dim, n_classes=2, learning_rate=0.001, 
+                   hidden_units1=64, hidden_units2=32, dropout_rate=0.2):
+    model = keras.Sequential([
+        keras.layers.Input(shape=(input_dim,)),
+        keras.layers.Dense(hidden_units1, activation="relu"),
+        keras.layers.Dense(hidden_units2, activation="relu"),
+        keras.layers.Dropout(dropout_rate),
+        keras.layers.Dense(1, activation="sigmoid"),
+    ])
+    model.compile(
+        optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
+        loss="binary_crossentropy",
+        metrics=["AUC"],
+    )
+    return model
+    """, language='python')
+
+if st.button("Run TensorFlow Model"):
+    with st.spinner("Training TensorFlow Model..."):
+        # Data Prep (TensorFlow doesn't use the ImbPipeline the same way easily)
+        # We manually scale and SMOTE for this demo
+        scaler = StandardScaler()
+        X_train_sc = scaler.fit_transform(X_train)
+        X_test_sc = scaler.transform(X_test)
+        
+        smote = SMOTE(random_state=42)
+        X_train_res, y_train_res = smote.fit_resample(X_train_sc, y_train)
+        
+        # Build Model
+        input_dim = X_train_res.shape[1]
+        model = keras.Sequential([
+            keras.layers.Input(shape=(input_dim,)),
+            keras.layers.Dense(64, activation="relu"),
+            keras.layers.Dense(32, activation="relu"),
+            keras.layers.Dropout(0.2),
+            keras.layers.Dense(1, activation="sigmoid"),
+        ])
+        model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["AUC"])
+        
+        # Train
+        history = model.fit(X_train_res, y_train_res, epochs=20, batch_size=32, verbose=0, validation_split=0.1)
+        
+        # Predict
+        y_proba = model.predict(X_test_sc).flatten()
+        y_pred = (y_proba > 0.5).astype(int)
+        
+        # Metrics
+        acc = accuracy_score(y_test, y_pred)
+        auc = roc_auc_score(y_test, y_proba)
+        
+        st.success("**TensorFlow Model Trained Successfully!**")
+        col1, col2 = st.columns(2)
+        col1.metric("Accuracy", f"{acc:.2%}")
+        col2.metric("ROC AUC", f"{auc:.3f}")
+        
+        # Plot Loss Curve
+        st.write("Training History (Loss):")
+        fig, ax = plt.subplots(figsize=(6, 2))
+        ax.plot(history.history['loss'], label='Train Loss')
+        ax.plot(history.history['val_loss'], label='Val Loss')
+        ax.legend()
+        st.pyplot(fig)
