@@ -1,308 +1,293 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 st.set_page_config(
-    page_title="Covid Data Analysis - Data Exploration and Munging",
+    page_title="Framingham Heart Study - Data Exploration",
     page_icon="📊",
-    #layout="wide"   
+    layout="wide"
 )
-#st.markdown("""<style>body {zoom: 1;  /* Adjust this value as needed */}</style>""", unsafe_allow_html=True)
 
-st.sidebar.markdown("""<div style="font-size: 17px;">✍️ <strong>Authors:</strong></div> 
+# Sidebar Authors
+st.sidebar.markdown("""<div style="font-size: 17px;">✍️ <strong>Authors (Group 6):</strong></div> 
 \n&nbsp;                                  
-<a href="https://www.linkedin.com/in/amralshatnawi/" style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; text-decoration: none; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Amr Alshatnawi&nbsp;&nbsp;</a><br>             
+<div style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Cleo Habets&nbsp;&nbsp;</div><br>              
 
-<a href="https://www.linkedin.com/in/hailey-pangburn" style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; text-decoration: none; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Hailey Pangburn&nbsp;&nbsp;</a><br>             
-                    
-<a href="mailto:mcmasters@uchicago.edu" style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; text-decoration: none; font-size: 15px; border-radius: 4px;">Richard McMasters</a><br>
+<div style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Jerrica Pubben&nbsp;&nbsp;</div><br>              
+                  
+<div style="display: inline-block; padding: 5px 7px; background-color: #871212; color: white; text-align: center; font-size: 15px; border-radius: 4px;">&nbsp;&nbsp;Noura al Sayed&nbsp;&nbsp;</div><br>
 """, unsafe_allow_html=True)
 
 st.sidebar.write("---")
-st.sidebar.markdown("""📅 March 9th, 2024""")
-st.sidebar.image("Ulogo.png")
+st.sidebar.markdown("""📅 Current Analysis Version""")
 
-
-############################# start page content #############################
+############################# Start Page Content #############################
 
 st.title("Data Exploration and Munging")
 st.divider()
 
+# -----------------------------------------------------------------------------
+# 1. Data Exploration
+# -----------------------------------------------------------------------------
+st.header("1. Data Exploration")
 
-st.header("Sampling the Data")
-st.markdown("""Given the extensive size of our dataset, containing 105 million records,
-             we employed systematic sampling to generate a manageable sample dataset.
-             This approach simplifies processing, analysis, and overall handling.
-             We decided to select every 100th record from the original dataset for our sample.""")
+# Load Data
+@st.cache_data
+def load_data():
+    url = 'https://raw.githubusercontent.com/LUCE-Blockchain/Databases-for-teaching/refs/heads/main/Framingham%20Dataset.csv'
+    return pd.read_csv(url)
 
-with st.expander("👆 Expand to view systematic sampling code"):
+data = load_data()
+
+st.markdown("We begin by loading the raw longitudinal dataset.")
+st.write(f"The dataset contains **{data.shape[0]}** rows and **{data.shape[1]}** columns.")
+st.write("Data preview:")
+st.dataframe(data.head())
+
+with st.expander("👆 Expand to view data loading code"):
     st.code("""
 import pandas as pd
 
-# data file path
-file_path = 'drive/MyDrive/Data_Analysis/CDC_Covid_Data.csv'
-# sample every 100th record
-sampling_interval = 100  
-chunk_size = 10000
+# Load dataset
+url = 'https://raw.githubusercontent.com/LUCE-Blockchain/Databases-for-teaching/refs/heads/main/Framingham%20Dataset.csv'
+cvd = pd.read_csv(url)
 
-# Placeholder for sampled rows
-sampled_rows = []
+print("Raw data shape:", cvd.shape) # Rows, columns
+cvd.head()
+    """)
 
-# Open the file and iterate over it in chunks
-with pd.read_csv(file_path, chunksize=chunk_size, na_values=['Missing', 'Unknown', 'NA', 'NaN']) as reader:
-    for chunk_number, chunk in enumerate(reader):
-        # Calculate the row index within the original file (global index) and select row
-        start_row = chunk_number * chunk_size
-        end_row = start_row + len(chunk)
-        rows_to_sample = range(start_row, end_row, sampling_interval)
+st.subheader("Statistical Summary")
+st.write(data.describe().T)
 
-        # Adjust rows_to_sample to local indices within the chunk
-        local_indices_to_sample = [row % chunk_size for row in rows_to_sample if row >= start_row and row < end_row]
+# -----------------------------------------------------------------------------
+# 2. Longitudinal Structure
+# -----------------------------------------------------------------------------
+st.header("2. Longitudinal structure: periods and participants")
 
-        # Append the sampled rows from this chunk to the list
-        sampled_rows.append(chunk.iloc[local_indices_to_sample])
-
-# Concatenate all sampled rows into a single DataFrame
-sampled_df = pd.concat(sampled_rows, ignore_index=True)
-
-# file path to save the sampled DataFrame
-output_file_path = 'systematic_sampled_covid_data_1M.csv'
-
-# Save the DataFrame to a CSV file
-sampled_df.to_csv(output_file_path, index=False)
-
-            """)
-
-
-
-st.header("Exploring the Data")
-
-#data = pd.read_csv("systematic_sampled_covid_data.csv", na_values=['Missing', 'Unknown', 'NA', 'NaN', '', ' '])
-
-# data 
-csv_url = "https://www.dropbox.com/scl/fi/3ssnswv3158des6o0102v/systematic_sampled_covid_data_1M.csv?rlkey=kmf3ym19wdl3bq006fii5mcqa&st=8h53tkov&dl=1"
-data = pd.read_csv(csv_url, na_values=['Missing', 'Unknown', 'NA', 'NaN', '', ' '])
-st.write(f"The sampled dataset contains 1,045,441 rows and {data.shape[1]} columns.")
-st.markdown("Data preview: ")
-st.write(data.head())
-with st.expander("👆 Expand to view code"):
-    st.code("""
-csv_url = "https://www.dropbox.com/scl/fi/3ssnswv3158des6o0102v/systematic_sampled_covid_data_1M.csv?rlkey=kmf3ym19wdl3bq006fii5mcqa&st=8h53tkov&dl=1"
-data = pd.read_csv(csv_url, na_values=['Missing', 'Unknown', 'NA', 'NaN', '', ' '])
-st.write(f"The sampled dataset contains {data.shape[0]} rows and {data.shape[1]} columns.")
-print("Data preview: ")
-data.head()
-        """)
-
-st.subheader("How have COVID-19 case counts varied over time since the onset of the pandemic?")
-
-
-data['case_month'] = pd.to_datetime(data['case_month'], format='%Y-%m')
-
-# Ensure dataframe is sorted by case_month
-monthly_cases = data.groupby('case_month').size().reset_index(name='cases')
-monthly_cases = monthly_cases.sort_values('case_month')
-
-# Creating an interactive line plot with Plotly
-fig = px.line(monthly_cases, x='case_month', y='cases', title='COVID-19 Cases Over Time',
-              labels={'case_month': 'Month', 'cases': 'Number of Cases'},
-              markers=True)
-
-# Improve layout
-fig.update_layout(xaxis_title='Date',
-                  yaxis_title='Number of Cases',
-                  #width=900,
-                  #height=700,
-                  xaxis=dict(rangeslider=dict(visible=True), type='date')) 
-st.plotly_chart(fig)
-st.markdown("""The plot illustrates the overall trend in COVID-19 case numbers from the pandemic's onset,
-            highlighting a significant peak at the beginning of 2022. 
-           This surge in cases is likely attributable to the emergence of the omicron variant,
-            which was identified in November 2021. """)
-
-with st.expander("👆 Expand to view plot code"):
-    st.code("""
-import plotly.express as px
-
-data['case_month'] = pd.to_datetime(data['case_month'], format='%Y-%m')
-
-# Ensure dataframe is sorted by case_month
-monthly_cases = data.groupby('case_month').size().reset_index(name='cases')
-monthly_cases = monthly_cases.sort_values('case_month')
-
-# Creating an interactive line plot with Plotly
-fig = px.line(monthly_cases, x='case_month', y='cases', title='COVID-19 Cases Over Time',
-              labels={'case_month': 'Month', 'cases': 'Number of Cases'},
-              markers=True)
-
-# Improve layout
-fig.update_layout(xaxis_title='Date',
-                  yaxis_title='Number of Cases',
-                  xaxis=dict(rangeslider=dict(visible=True), type='date')) 
-
-fig.show()
+st.markdown("""
+The Framingham Heart Study is longitudinal. Participants attend multiple examinations (Visits).
+Here we analyze the distribution of records across periods and participants.
 """)
+
+# Metrics
+col1, col2 = st.columns(2)
+n_participants = data['RANDID'].nunique()
+visit_counts = data.groupby('RANDID')['PERIOD'].nunique()
+
+col1.metric("Unique Participants", n_participants)
+col1.write("Distribution of visits per participant:")
+col1.write(visit_counts.value_counts().sort_index())
+
+with col2:
+    st.write("**Records per Period (Visit Number):**")
+    st.bar_chart(data['PERIOD'].value_counts().sort_index())
+
+with st.expander("👆 Expand to view longitudinal analysis code"):
+    st.code("""
+# Period distribution
+print("PERIOD distribution (rows):")
+print(cvd['PERIOD'].value_counts().sort_index())
+
+# 1 participant can have multiple rows (max. 3)
+n_participants = cvd['RANDID'].nunique()
+visit_counts = cvd.groupby('RANDID')['PERIOD'].nunique()
+
+print(f"Unique participants: {n_participants}")
+print("Visits per participant (value counts):")
+print(visit_counts.value_counts().sort_index())
+    """)
+
+st.subheader("Interactive Participant Timeline")
+st.markdown("Select a participant ID to view their health trajectory across the 3 visits.")
+
+# Interactive Timeline Widget
+selected_id = st.selectbox("Choose Participant ID (RANDID):", sorted(data['RANDID'].unique()))
+
+user_data = data[data['RANDID'] == selected_id].sort_values('PERIOD')
+
+if not user_data.empty:
+    fig_timeline, axes = plt.subplots(1, 3, figsize=(15, 4))
     
+    # BP
+    axes[0].plot(user_data['PERIOD'], user_data['SYSBP'], marker='o', label='SYSBP', color='red')
+    axes[0].plot(user_data['PERIOD'], user_data['DIABP'], marker='o', label='DIABP', color='blue')
+    axes[0].set_title("Blood Pressure")
+    axes[0].set_ylabel("mmHg")
+    axes[0].set_xticks([1, 2, 3])
+    axes[0].legend()
+    axes[0].grid(True, linestyle='--', alpha=0.5)
+    
+    # BMI
+    axes[1].plot(user_data['PERIOD'], user_data['BMI'], marker='s', color='green', linestyle='--')
+    axes[1].set_title("BMI")
+    axes[1].set_ylabel("Kg/m²")
+    axes[1].set_xticks([1, 2, 3])
+    axes[1].grid(True, linestyle='--', alpha=0.5)
+    
+    # Cholesterol
+    axes[2].plot(user_data['PERIOD'], user_data['TOTCHOL'], marker='^', color='orange')
+    axes[2].set_title("Cholesterol")
+    axes[2].set_ylabel("mg/dL")
+    axes[2].set_xticks([1, 2, 3])
+    axes[2].grid(True, linestyle='--', alpha=0.5)
+    
+    st.pyplot(fig_timeline)
+else:
+    st.write("No data found for this ID.")
 
-st.subheader("How do COVID-19 case counts vary among U.S. states?")
-cases_per_state = data.groupby('res_state').size().reset_index(name='cases')
+# -----------------------------------------------------------------------------
+# 3. Missing Data Overview
+# -----------------------------------------------------------------------------
+st.header("3. Missing data overview and analysis")
 
+missing = data.isna().sum().sort_values(ascending=False)
+missing_pct = (missing / len(data) * 100).round(2)
+missing_df = pd.DataFrame({'Missing Values': missing, '%': missing_pct})
+missing_df = missing_df[missing_df['Missing Values'] > 0]
 
-fig = px.choropleth(cases_per_state,
-                    locations='res_state',
-                    locationmode="USA-states",
-                    color='cases',
-                    scope="usa",
-                    title='COVID-19 Cases by State',
-                    hover_name='res_state',
-                    hover_data={'res_state': False, 'cases': True}, 
-                    color_continuous_scale=px.colors.sequential.YlOrRd, 
-                    labels={'cases': 'Case Count'})  
+st.dataframe(missing_df)
 
-# Enhance layout
-fig.update_layout(
-    title=dict(x=0.5),  
-    geo=dict(
-        lakecolor='rgb(255, 255, 255)', 
-        showlakes=True,  # Show lakes
-        landcolor='rgb(217, 217, 217)' 
-    ),
-    #width=900, 
-    #height=700,
-    margin=dict(t=50, l=0, r=0, b=0)
+# Plotly Bar Chart for Missing Data
+fig_missing = px.bar(missing_df, x='%', y=missing_df.index, orientation='h', 
+                     title="Missing Values by Variable (%)",
+                     labels={'index': 'Variable', '%': 'Percentage Missing'},
+                     color='%', color_continuous_scale='Teal')
+st.plotly_chart(fig_missing)
+
+st.markdown("""
+**Interpretation:**
+* **LDLC & HDLC (~74% missing):** These were likely only measured in Period 3 (MNAR/Structural).
+* **GLUCOSE (~12%):** Likely MAR (lab/patient factors).
+* **Others (<5%):** Likely MCAR (random entry errors).
+""")
+
+with st.expander("👆 Expand to view missing data code"):
+    st.code("""
+# Overall missingness
+missing = cvd.isna().sum().sort_values(ascending=False)
+missing_pct = (missing / len(cvd) * 100).round(2)
+missing_summary = pd.DataFrame({'Missing values': missing, '%': missing_pct})
+missing_summary[missing_summary['Missing values'] > 0]
+    """)
+
+# -----------------------------------------------------------------------------
+# 4. Distributions, Outliers & Feature Engineering
+# -----------------------------------------------------------------------------
+st.header("4. Distributions, outliers, data cleaning, feature engineering")
+
+st.subheader("Numeric Distributions")
+numeric_cols = ['SYSBP', 'DIABP', 'BMI', 'TOTCHOL', 'GLUCOSE', 'HEARTRTE', 'CIGPDAY']
+selected_metric = st.selectbox("Select variable to visualize distribution:", numeric_cols)
+
+# Histogram
+fig_dist = px.histogram(data, x=selected_metric, nbins=30, title=f"Distribution of {selected_metric}",
+                        color_discrete_sequence=['#1f77b4'])
+st.plotly_chart(fig_dist)
+
+st.subheader("Outlier Detection (Boxplots)")
+# Boxplot
+fig_box = px.box(data, y=selected_metric, title=f"Boxplot of {selected_metric}", points="outliers")
+st.plotly_chart(fig_box)
+
+with st.expander("👆 Expand to view distribution code"):
+    st.code("""
+# Using Plotly for interactive distributions
+fig = px.histogram(cvd, x=selected_variable, title=f"Distribution of {selected_variable}")
+fig.show()
+
+# Boxplots for outliers
+fig_box = px.box(cvd, y=selected_variable, title=f"Boxplot of {selected_variable}")
+fig_box.show()
+    """)
+
+st.subheader("Feature Engineering: Pulse Pressure (PP)")
+st.markdown("""
+We create a new variable **Pulse Pressure (PP)** representing arterial stiffness.
+$$ PP = SYSBP - DIABP $$
+We are specifically interested in the change in PP ($\Delta PP$) between Visit 1 and Visit 2.
+""")
+
+# Calculate PP and Delta PP (Simplified for Demo)
+df_clean = data.copy()
+df_clean['PP'] = df_clean['SYSBP'] - df_clean['DIABP']
+
+# Pivot to wide format to calculate delta
+pp_wide = df_clean.pivot_table(index='RANDID', columns='PERIOD', values='PP').reset_index()
+pp_wide.columns = ['RANDID', 'PP1', 'PP2', 'PP3']
+
+# Calculate Delta
+pp_wide['DELTA_PP'] = pp_wide['PP2'] - pp_wide['PP1']
+valid_delta = pp_wide.dropna(subset=['DELTA_PP'])
+
+st.write(f"Participants with valid PP at Visit 1 & 2: **{valid_delta.shape[0]}**")
+st.write(valid_delta[['PP1', 'PP2', 'DELTA_PP']].describe().T)
+
+with st.expander("👆 Expand to view Feature Engineering code"):
+    st.code("""
+# Compute ΔPP = PP2 − PP1, keep only participants with both visits
+pp_delta = (
+    pp_wide[['PP1', 'PP2']]
+    .dropna()  # require both V1 & V2
+    .assign(DELTA_PP=lambda d: d['PP2'] - d['PP1'])
+    .reset_index()
 )
 
-# Adjust color scale bar
-fig.update_coloraxes(colorbar=dict(
-    title='Total Cases',  
-    thickness=20,  
-    len=0.75, 
-    bgcolor='rgba(255,255,255,0.5)',
-    tickfont=dict(color='black'),  
-    titlefont=dict(color='black')  
-))
+print("Participants with PP1 & PP2:", pp_delta['RANDID'].nunique())
+pp_delta[['DELTA_PP']].describe()
+    """)
 
+# -----------------------------------------------------------------------------
+# 5. Analytic Dataset: Overview
+# -----------------------------------------------------------------------------
+st.header("5. Analytic dataset: overview")
 
-st.plotly_chart(fig)
-
-st.markdown("""The choropleth map showcases the distribution of COVID-19 case counts, 
-            highlighting that California has the highest number of cases,
-             followed by Texas, New York, and Florida. This trend could be related to the
-             larger population sizes in these states, considering they are the four most populated states in the U.S.""")
-
-with st.expander("👆 Expand to view plot code"):
-    st.code("""
-import plotly.express as px
-
-cases_per_state = data.groupby('res_state').size().reset_index(name='cases')
-
-
-fig = px.choropleth(cases_per_state,
-                    locations='res_state',
-                    locationmode="USA-states",
-                    color='cases',
-                    scope="usa",
-                    title='COVID-19 Cases by State',
-                    hover_name='res_state',
-                    hover_data={'res_state': False, 'cases': True}, 
-                    color_continuous_scale=px.colors.sequential.YlOrRd, 
-                    labels={'cases': 'Case Count'})  
-
-# Enhance layout
-fig.update_layout(
-    title=dict(x=0.5),  
-    geo=dict(
-        lakecolor='rgb(255, 255, 255)', 
-        showlakes=True,  # Show lakes
-        landcolor='rgb(217, 217, 217)' 
-    ),
-    margin=dict(t=50, l=0, r=0, b=0)
-)
-
-# Adjust color scale bar
-fig.update_coloraxes(colorbar=dict(
-    title='Total Cases',  
-    thickness=20,  
-    len=0.75, 
-    bgcolor='rgba(255,255,255,0.5)',
-    tickfont=dict(color='black'),  
-    titlefont=dict(color='black')  
-))
-
-fig.show()""")
-        
-st.subheader("How do COVID-19 case counts vary by gender?")
-
-# Gender dataftame 
-sex_counts = data['sex'].value_counts().reset_index()
-sex_counts.columns = ['Sex', 'Count']  # Rename columns to match what we'll refer to in the plot
-
-# Using the dataFrame in Plotly
-fig = px.bar(sex_counts, x='Sex', y='Count', 
-             title='Count of COVID-19 Cases by Sex',
-             labels={'Count': 'Number of Cases'},
-             color='Sex',
-             color_discrete_map={'Female':'magenta', 'Male':'gold', 'Other':'green'})
-
-st.plotly_chart(fig)
-
-st.markdown("""The bar graph above illustrates the distribution of COVID-19 cases by sex, 
-            revealing that **females** account for **544,048** cases, constituting **52%** of the total,
-             while **males** represent **457,350** cases, making up **44%**. Additionally, there are **12** cases categorized as **'other'**,
-             contributing to less than **1% closer to 0%** of the total, and **44,031** cases are marked as **missing** data,
-             which comprises approximately **4%** of the overall case count.
+st.markdown("""
+The final analytic dataset consists of participants who meet the inclusion criteria:
+1.  Complete Blood Pressure data at Visits 1 & 2 (to compute $\Delta PP$).
+2.  Observed CVD outcome by Visit 3.
 """)
 
-with st.expander("👆 Expand to view code"):
-    st.code("""
-import plotly.express as px
-
-# Gender dataftame 
-sex_counts = data['sex'].value_counts().reset_index()
-sex_counts.columns = ['Sex', 'Count']  # Rename columns to match what we'll refer to in the plot
-
-# Using the dataFrame in Plotly
-fig = px.bar(sex_counts, x='Sex', y='Count', 
-             title='Count of COVID-19 Cases by Sex',
-             labels={'Count': 'Number of Cases'},
-             color='Sex',
-             color_discrete_map={'Female':'pink', 'Male':'blue', 'Other':'green'})
-fig.show()
+st.markdown("""
+| **Study stage / Inclusion criteria** | **Count (N)** |
+| ---------------------------------------- | ------------- |
+| Total participants                       | 4,434         |
+| Participants with PP data at V1 & V2     | 3,930         |
+| Participants with CVD data at V3         | 3,263         |
+| **Final analytic sample ($\Delta PP$ & V3 outcome)** | **3,206** |
 """)
 
+st.subheader("Interactive Dataset Inspection")
 
-st.subheader("How do COVID-19 case counts vary by Race?")
-# Race dataftame 
-race_counts = data['race'].value_counts().reset_index()
-race_counts.columns = ['Race', 'Count']  # Rename columns to match what we'll refer to in the plot
+# Create a mock analytic dataset for display purposes (Merging Delta back to main attributes)
+# In the real notebook this involves more complex imputation
+analytic_mock = valid_delta.merge(data[data['PERIOD']==3][['RANDID', 'CVD', 'AGE', 'SEX']], on='RANDID', how='inner')
 
-# Using the dataFrame in Plotly
-fig = px.bar(race_counts, x='Race', y='Count', 
-             title='Count of COVID-19 Cases by Race',
-             labels={'Count': 'Number of Cases'},
-             color='Race',
-             )
-fig.update_layout(width=900, height=700)
-st.plotly_chart(fig)
+cvd_filter = st.radio("Filter by CVD Outcome (Visit 3):", [0, 1], format_func=lambda x: "No CVD (0)" if x==0 else "CVD Event (1)")
 
-st.markdown("""The plot displayed above illustrates the distribution of COVID-19 cases by race,
-indicating that the White population has a significantly higher number of cases relative to other racial groups.""")
+subset = analytic_mock[analytic_mock['CVD'] == cvd_filter]
 
-with st.expander("👆 Expand to view code"):
+st.write(f"**Group:** CVD = {cvd_filter}")
+st.write(f"**Number of patients:** {len(subset)}")
+st.write(f"**Mean Age:** {subset['AGE'].mean():.1f} years")
+st.dataframe(subset.head(10))
+
+with st.expander("👆 Expand to view analytic dataset code"):
     st.code("""
-import plotly.express as px
+def select_cvd_data_analytic(cvd_status, df):
+  '''Filter the analytic dataframe on CVD yes/no.'''
+  # Filtering
+  subset = df.loc[df['CVD'] == cvd_status]
+  
+  # Extra info
+  print(f"--- Group: CVD = {cvd_status} ---")
+  print(f"Number of patients: {len(subset)}")
+  if 'V1_AGE' in subset.columns:
+    print(f"Mean age: {subset['V1_AGE'].mean():.1f} years")
+  return subset.head(10)
 
-# Race dataftame 
-race_counts = data['race'].value_counts().reset_index()
-race_counts.columns = ['Race', 'Count']  # Rename columns to match what we'll refer to in the plot
-
-# Using the dataFrame in Plotly
-fig = px.bar(race_counts, x='Race', y='Count', 
-             title='Count of COVID-19 Cases by Race',
-             labels={'Count': 'Number of Cases'},
-             color='Race',
-             )
-fig.update_layout(width=900, height=700)
-fig.show()
-            
-""")
+# The interactive widget
+interact(select_cvd_data_analytic, cvd_status=sorted(analytic['CVD'].unique()), df=fixed(analytic));
+    """)
